@@ -5,7 +5,10 @@ import org.springframework.stereotype.Component;
 import ru.yandex.practicum.filmorate.exception.NotFoundException;
 import ru.yandex.practicum.filmorate.model.Film;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -20,13 +23,9 @@ public class InMemoryFilmStorage implements FilmStorage {
 
     @Override
     public Film create(Film film) {
-        long id = nextId++;
-        film.setId(id);
-
-        // Создаем копию
-        Film filmToSave = copyFilm(film);
-        films.put(id, filmToSave);
-        return filmToSave;
+        film.setId(nextId++);
+        films.put(film.getId(), film);
+        return film;
     }
 
     @Override
@@ -41,10 +40,8 @@ public class InMemoryFilmStorage implements FilmStorage {
             throw new NotFoundException("Фильм с id=" + id + " не найден");
         }
 
-        // Создаем копию
-        Film filmToSave = copyFilm(film);
-        films.put(id, filmToSave);
-        return filmToSave;
+        films.put(id, film);
+        return film;
     }
 
     @Override
@@ -58,7 +55,7 @@ public class InMemoryFilmStorage implements FilmStorage {
             throw new NotFoundException("Фильм с id=" + id + " не найден");
         }
 
-        return copyFilm(film);
+        return film; // Не создаем копию!
     }
 
     @Override
@@ -67,20 +64,5 @@ public class InMemoryFilmStorage implements FilmStorage {
             throw new NotFoundException("Фильм с id=" + id + " не найден");
         }
         films.remove(id);
-    }
-
-    private Film copyFilm(Film original) {
-        Film copy = new Film();
-        copy.setId(original.getId());
-        copy.setName(original.getName());
-        copy.setDescription(original.getDescription());
-        copy.setReleaseDate(original.getReleaseDate());
-        copy.setDuration(original.getDuration());
-
-        // Копируем лайки
-        Set<Long> likesCopy = new HashSet<>(original.getLikes());
-        copy.setLikes(likesCopy);
-
-        return copy;
     }
 }

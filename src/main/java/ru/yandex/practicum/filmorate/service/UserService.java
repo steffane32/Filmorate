@@ -9,6 +9,7 @@ import ru.yandex.practicum.filmorate.storage.user.UserStorage;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -43,9 +44,7 @@ public class UserService {
             throw new ValidationException("ID пользователя должен быть указан");
         }
 
-        // Проверяем существование пользователя
-        userStorage.findById(user.getId());
-
+        userStorage.findById(user.getId()); // Проверяем существование
         return userStorage.update(user);
     }
 
@@ -61,70 +60,23 @@ public class UserService {
         User user = userStorage.findById(userId);
         User friend = userStorage.findById(friendId);
 
-        Set<Long> userFriends = user.getFriends();
-        Set<Long> friendFriends = friend.getFriends();
-
-        if (userFriends.contains(friendId)) {
+        if (user.getFriends().contains(friendId)) {
             throw new ValidationException("Пользователь уже добавлен в друзья");
         }
 
-        // Создаем новых пользователей с обновленными друзьями
-        User updatedUser = new User();
-        updatedUser.setId(user.getId());
-        updatedUser.setEmail(user.getEmail());
-        updatedUser.setLogin(user.getLogin());
-        updatedUser.setName(user.getName());
-        updatedUser.setBirthday(user.getBirthday());
-        updatedUser.setFriends(new java.util.HashSet<>(userFriends));
-        updatedUser.getFriends().add(friendId);
-
-        User updatedFriend = new User();
-        updatedFriend.setId(friend.getId());
-        updatedFriend.setEmail(friend.getEmail());
-        updatedFriend.setLogin(friend.getLogin());
-        updatedFriend.setName(friend.getName());
-        updatedFriend.setBirthday(friend.getBirthday());
-        updatedFriend.setFriends(new java.util.HashSet<>(friendFriends));
-        updatedFriend.getFriends().add(userId);
-
-        // Сохраняем
-        userStorage.update(updatedUser);
-        userStorage.update(updatedFriend);
+        user.getFriends().add(friendId); // Работаем с существующими объектами
+        friend.getFriends().add(userId);
     }
 
     public void removeFriend(Long userId, Long friendId) {
         User user = userStorage.findById(userId);
         User friend = userStorage.findById(friendId);
 
-        Set<Long> userFriends = user.getFriends();
-        Set<Long> friendFriends = friend.getFriends();
-
-        if (!userFriends.contains(friendId)) {
+        if (!user.getFriends().remove(friendId)) {
             throw new ValidationException("Пользователь не является другом");
         }
 
-        // Создаем новых пользователей с обновленными друзьями
-        User updatedUser = new User();
-        updatedUser.setId(user.getId());
-        updatedUser.setEmail(user.getEmail());
-        updatedUser.setLogin(user.getLogin());
-        updatedUser.setName(user.getName());
-        updatedUser.setBirthday(user.getBirthday());
-        updatedUser.setFriends(new java.util.HashSet<>(userFriends));
-        updatedUser.getFriends().remove(friendId);
-
-        User updatedFriend = new User();
-        updatedFriend.setId(friend.getId());
-        updatedFriend.setEmail(friend.getEmail());
-        updatedFriend.setLogin(friend.getLogin());
-        updatedFriend.setName(friend.getName());
-        updatedFriend.setBirthday(friend.getBirthday());
-        updatedFriend.setFriends(new java.util.HashSet<>(friendFriends));
-        updatedFriend.getFriends().remove(userId);
-
-        // Сохраняем
-        userStorage.update(updatedUser);
-        userStorage.update(updatedFriend);
+        friend.getFriends().remove(userId);
     }
 
     public List<User> getFriends(Long userId) {
@@ -142,7 +94,7 @@ public class UserService {
         User user1 = userStorage.findById(userId1);
         User user2 = userStorage.findById(userId2);
 
-        Set<Long> commonIds = new java.util.HashSet<>(user1.getFriends());
+        Set<Long> commonIds = new HashSet<>(user1.getFriends());
         commonIds.retainAll(user2.getFriends());
 
         List<User> commonFriends = new ArrayList<>();

@@ -5,7 +5,10 @@ import org.springframework.stereotype.Component;
 import ru.yandex.practicum.filmorate.exception.NotFoundException;
 import ru.yandex.practicum.filmorate.model.User;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -21,13 +24,8 @@ public class InMemoryUserStorage implements UserStorage {
     @Override
     public User create(User user) {
         user.setId(nextId++);
-
-        // Создаем копию пользователя с новым сетом друзей
-        User userToSave = copyUser(user);
-        users.put(userToSave.getId(), userToSave);
-
-        log.info("Создан пользователь с ID: {}", userToSave.getId());
-        return userToSave;
+        users.put(user.getId(), user);
+        return user;
     }
 
     @Override
@@ -42,12 +40,8 @@ public class InMemoryUserStorage implements UserStorage {
             throw new NotFoundException("Пользователь с id=" + id + " не найден");
         }
 
-        // Создаем копию
-        User userToSave = copyUser(user);
-        users.put(id, userToSave);
-
-        log.info("Обновлен пользователь с ID: {}", id);
-        return userToSave;
+        users.put(id, user);
+        return user;
     }
 
     @Override
@@ -61,8 +55,7 @@ public class InMemoryUserStorage implements UserStorage {
             throw new NotFoundException("Пользователь с id=" + id + " не найден");
         }
 
-        // Возвращаем копию
-        return copyUser(user);
+        return user; // Не создаем копию!
     }
 
     @Override
@@ -71,21 +64,5 @@ public class InMemoryUserStorage implements UserStorage {
             throw new NotFoundException("Пользователь с id=" + id + " не найден");
         }
         users.remove(id);
-    }
-
-    // Метод для глубокого копирования пользователя
-    private User copyUser(User original) {
-        User copy = new User();
-        copy.setId(original.getId());
-        copy.setEmail(original.getEmail());
-        copy.setLogin(original.getLogin());
-        copy.setName(original.getName());
-        copy.setBirthday(original.getBirthday());
-
-        // Копируем сет друзей
-        Set<Long> friendsCopy = new HashSet<>(original.getFriends());
-        copy.setFriends(friendsCopy);
-
-        return copy;
     }
 }

@@ -8,6 +8,7 @@ import ru.yandex.practicum.filmorate.model.Film;
 import ru.yandex.practicum.filmorate.service.FilmService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import java.util.List;
 
 @Slf4j
@@ -45,19 +46,17 @@ public class FilmController {
     @PutMapping("/{id}/like/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void addLike(@PathVariable Long id, @PathVariable Long userId) {
-        log.info("Добавление лайка: фильм {}, пользователь {}", id, userId);
         filmService.addLike(id, userId);
     }
 
     @DeleteMapping("/{id}/like/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeLike(@PathVariable Long id, @PathVariable Long userId) {
-        log.info("Удаление лайка: фильм {}, пользователь {}", id, userId);
         filmService.removeLike(id, userId);
     }
 
     @GetMapping("/popular")
-    public List<Film> getPopular(@RequestParam(defaultValue = "10") int count) {
+    public List<Film> getPopular(@RequestParam(defaultValue = "10") @Positive int count) {
         return filmService.getPopularFilms(count);
     }
 }
