@@ -1,0 +1,56 @@
+# src/main/resources/application.yaml
+spring:
+  datasource:
+    url: jdbc:h2:file:./db/filmorate;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      data-locations: classpath:data.sql
+      schema-locations: classpath:schema.sql
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-stacktrace: never
+    include-binding-errors: always
+
+logging:
+  level:
+    root: INFO
+    ru.yandex.practicum.filmorate: INFO
+    org.springframework.jdbc.core.JdbcTemplate: INFO
+  file:
+    name: logs/filmorate.log
+  pattern:
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    console: '%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'

@@ -1,4 +1,3 @@
--- schema.sql
 CREATE TABLE IF NOT EXISTS mpa_ratings (
     mpa_id INTEGER PRIMARY KEY,
     name VARCHAR(10) NOT NULL UNIQUE,
@@ -39,23 +38,28 @@ CREATE TABLE IF NOT EXISTS film_genres (
 CREATE TABLE IF NOT EXISTS likes (
     film_id BIGINT,
     user_id BIGINT,
-    liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (film_id, user_id),
     FOREIGN KEY (film_id) REFERENCES films(film_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
--- Исправляем: меняем 'PENDING' на 'REQUESTED' в ограничении
+-- Убираем поле status, так как дружба теперь односторонняя без подтверждения
 CREATE TABLE IF NOT EXISTS friendships (
     user_id BIGINT,
     friend_id BIGINT,
-    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, friend_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    CONSTRAINT check_self_friendship CHECK (user_id != friend_id),
-    CONSTRAINT valid_status CHECK (status IN ('REQUESTED', 'CONFIRMED'))
-    -- Убрали 'REJECTED' для упрощения
+    CONSTRAINT check_self_friendship CHECK (user_id != friend_id)
 );
+
+-- Обновляем индексы
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_films_title ON films(title);
+CREATE INDEX IF NOT EXISTS idx_films_mpa_id ON films(mpa_id);
+CREATE INDEX IF NOT EXISTS idx_film_genres_film_id ON film_genres(film_id);
+CREATE INDEX IF NOT EXISTS idx_film_genres_genre_id ON film_genres(genre_id);
+CREATE INDEX IF NOT EXISTS idx_likes_film_id ON likes(film_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_user_id ON friendships(user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_friend_id ON friendships(friend_id);

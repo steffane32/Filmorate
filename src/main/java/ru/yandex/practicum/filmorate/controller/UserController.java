@@ -24,13 +24,13 @@ public class UserController {
 
     @GetMapping
     public List<User> findAll() {
-        log.debug("Запрос всех пользователей");
+        log.info("Запрос всех пользователей");
         return userService.findAll();
     }
 
     @GetMapping("/{id}")
     public User findById(@PathVariable Long id) {
-        log.debug("Запрос пользователя по ID: {}", id);
+        log.info("Запрос пользователя по ID: {}", id);
         return userService.findById(id);
     }
 
@@ -63,13 +63,13 @@ public class UserController {
 
     @GetMapping("/{id}/friends")
     public List<User> getFriends(@PathVariable Long id) {
-        log.debug("Получение друзей пользователя: {}", id);
+        log.info("Получение друзей пользователя: {}", id);
         return userService.getFriends(id);
     }
 
     @GetMapping("/{id}/friends/common/{otherId}")
     public List<User> getCommonFriends(@PathVariable Long id, @PathVariable Long otherId) {
-        log.debug("Поиск общих друзей: {} и {}", id, otherId);
+        log.info("Поиск общих друзей: {} и {}", id, otherId);
         return userService.getCommonFriends(id, otherId);
     }
 }
