@@ -170,8 +170,7 @@ public class UserDbStorage implements UserStorage {
             User user = jdbcTemplate.queryForObject(sql, userRowMapper, id);
 
             // Загружаем друзей для пользователя
-            Set<Long> friends = getUserFriends(user.getId());
-            user.getFriends().addAll(friends);
+            loadUserFriends(user);
 
             log.debug("Пользователь найден: ID={}, email={}", user.getId(), user.getEmail());
             return user;
@@ -219,8 +218,8 @@ public class UserDbStorage implements UserStorage {
         }
 
         try {
-            // Добавляем одностороннюю дружбу со статусом PENDING
-            String sql = "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'PENDING')";
+            // Исправляем: используем 'REQUESTED' вместо 'PENDING'
+            String sql = "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'REQUESTED')";
             jdbcTemplate.update(sql, userId, friendId);
             log.info("✅ Друг добавлен (односторонне): {} -> {}", userId, friendId);
         } catch (DataAccessException e) {
@@ -264,9 +263,10 @@ public class UserDbStorage implements UserStorage {
             throw new NotFoundException("Пользователь с id=" + userId + " не найден");
         }
 
+        // Односторонняя дружба: получаем только тех, кого пользователь добавил в друзья
         String sql = "SELECT u.* FROM users u " +
                 "JOIN friendships f ON u.user_id = f.friend_id " +
-                "WHERE f.user_id = ? AND f.status = 'CONFIRMED' " +
+                "WHERE f.user_id = ? " +
                 "ORDER BY u.user_id";
 
         List<User> friends = jdbcTemplate.query(sql, userRowMapper, userId);
@@ -286,14 +286,15 @@ public class UserDbStorage implements UserStorage {
             throw new NotFoundException("Пользователь с id=" + userId2 + " не найден");
         }
 
+        // Общие друзья: пользователи, которых ОБА добавили в друзья
         String sql = "SELECT u.* FROM users u " +
                 "WHERE u.user_id IN (" +
                 "  SELECT f1.friend_id FROM friendships f1 " +
-                "  WHERE f1.user_id = ? AND f1.status = 'CONFIRMED'" +
+                "  WHERE f1.user_id = ?" +
                 ") " +
                 "AND u.user_id IN (" +
                 "  SELECT f2.friend_id FROM friendships f2 " +
-                "  WHERE f2.user_id = ? AND f2.status = 'CONFIRMED'" +
+                "  WHERE f2.user_id = ?" +
                 ") " +
                 "ORDER BY u.user_id";
 
@@ -379,26 +380,43 @@ public class UserDbStorage implements UserStorage {
         int rowsUpdated = jdbcTemplate.update(sql, userId, friendId);
 
         if (rowsUpdated == 0) {
-            // Если запрос дружбы был в обратном направлении, создаем взаимную дружбу
-            sql = "UPDATE friendships SET status = 'CONFIRMED' " +
-                    "WHERE user_id = ? AND friend_id = ?";
-            rowsUpdated = jdbcTemplate.update(sql, friendId, userId);
-
-            if (rowsUpdated > 0) {
-                // Создаем взаимную дружбу
-                sql = "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'CONFIRMED')";
-                jdbcTemplate.update(sql, userId, friendId);
-            }
+            log.warn("Запрос дружбы не найден: {} -> {}", userId, friendId);
+            // Можно создать обратную дружбу, если нужно
+            sql = "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'CONFIRMED')";
+            jdbcTemplate.update(sql, userId, friendId);
         }
 
         log.info("✅ Дружба подтверждена между {} и {}", userId, friendId);
     }
 
     /**
-     * Проверяет, являются ли пользователи друзьями
+     * Загружает друзей пользователя
+     */
+    private void loadUserFriends(User user) {
+        if (user == null || user.getId() == null) {
+            return;
+        }
+
+        String sql = "SELECT friend_id FROM friendships WHERE user_id = ?";
+        try {
+            List<Long> friendIds = jdbcTemplate.query(sql,
+                    (rs, rowNum) -> rs.getLong("friend_id"), user.getId());
+
+            // Очищаем текущий список и добавляем загруженных друзей
+            user.getFriends().clear();
+            user.getFriends().addAll(friendIds);
+
+            log.debug("Загружено {} друзей для пользователя {}", friendIds.size(), user.getId());
+        } catch (Exception e) {
+            log.error("Ошибка при загрузке друзей пользователя {}: {}", user.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Проверяет, являются ли пользователи друзьями (односторонняя проверка)
      */
     private boolean isFriends(Long userId1, Long userId2) {
-        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'CONFIRMED'";
+        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ? AND friend_id = ?";
         try {
             Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId1, userId2);
             return count != null && count > 0;
@@ -409,17 +427,74 @@ public class UserDbStorage implements UserStorage {
     }
 
     /**
-     * Получает ID друзей пользователя
+     * Получает ID подтвержденных друзей (двусторонняя проверка)
      */
-    private Set<Long> getUserFriends(Long userId) {
-        String sql = "SELECT friend_id FROM friendships WHERE user_id = ? AND status = 'CONFIRMED'";
+    private Set<Long> getConfirmedFriends(Long userId) {
+        String sql = "SELECT friend_id FROM friendships f1 " +
+                "WHERE f1.user_id = ? AND f1.status = 'CONFIRMED' " +
+                "AND EXISTS (" +
+                "  SELECT 1 FROM friendships f2 " +
+                "  WHERE f2.user_id = f1.friend_id AND f2.friend_id = ? AND f2.status = 'CONFIRMED'" +
+                ")";
         try {
             List<Long> friendIds = jdbcTemplate.query(sql,
-                    (rs, rowNum) -> rs.getLong("friend_id"), userId);
+                    (rs, rowNum) -> rs.getLong("friend_id"), userId, userId);
             return new HashSet<>(friendIds);
         } catch (Exception e) {
-            log.error("Ошибка при получении друзей пользователя {}: {}", userId, e.getMessage());
+            log.error("Ошибка при получении подтвержденных друзей пользователя {}: {}", userId, e.getMessage());
             return new HashSet<>();
         }
+    }
+
+    /**
+     * Получает количество друзей пользователя
+     */
+    public int getFriendsCount(Long userId) {
+        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ?";
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId);
+            return count != null ? count : 0;
+        } catch (Exception e) {
+            log.error("Ошибка при подсчете друзей пользователя {}: {}", userId, e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Проверяет, есть ли неподтвержденные заявки в друзья
+     */
+    public boolean hasPendingFriendRequest(Long fromUserId, Long toUserId) {
+        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'REQUESTED'";
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, fromUserId, toUserId);
+            return count != null && count > 0;
+        } catch (Exception e) {
+            log.error("Ошибка при проверке заявки в друзья {} -> {}: {}", fromUserId, toUserId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Получает список пользователей, отправивших заявки в друзья
+     */
+    public List<User> getFriendRequests(Long userId) {
+        String sql = "SELECT u.* FROM users u " +
+                "JOIN friendships f ON u.user_id = f.user_id " +
+                "WHERE f.friend_id = ? AND f.status = 'REQUESTED' " +
+                "ORDER BY u.user_id";
+
+        return jdbcTemplate.query(sql, userRowMapper, userId);
+    }
+
+    /**
+     * Получает список пользователей, которым отправлены заявки в друзья
+     */
+    public List<User> getSentFriendRequests(Long userId) {
+        String sql = "SELECT u.* FROM users u " +
+                "JOIN friendships f ON u.user_id = f.friend_id " +
+                "WHERE f.user_id = ? AND f.status = 'REQUESTED' " +
+                "ORDER BY u.user_id";
+
+        return jdbcTemplate.query(sql, userRowMapper, userId);
     }
 }

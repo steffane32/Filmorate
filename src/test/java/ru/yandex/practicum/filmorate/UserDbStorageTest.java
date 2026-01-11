@@ -127,13 +127,12 @@ class UserDbStorageTest {
         // Given
         User user1 = userStorage.create(testUser);
 
-        User user2 = User.builder()
-                .email("friend@example.com")
-                .login("friend")
-                .name("Friend User")
-                .birthday(LocalDate.of(1995, 5, 5))
-                .build();
-        userStorage.create(user2);
+        User user2 = new User();
+        user2.setEmail("friend@example.com");
+        user2.setLogin("friend");
+        user2.setName("Friend User");
+        user2.setBirthday(LocalDate.of(1995, 5, 5));
+        user2 = userStorage.create(user2);
 
         // When
         userStorage.addFriend(user1.getId(), user2.getId());
@@ -149,13 +148,12 @@ class UserDbStorageTest {
         // Given
         User user1 = userStorage.create(testUser);
 
-        User user2 = User.builder()
-                .email("friend@example.com")
-                .login("friend")
-                .name("Friend User")
-                .birthday(LocalDate.of(1995, 5, 5))
-                .build();
-        userStorage.create(user2);
+        User user2 = new User();
+        user2.setEmail("friend@example.com");
+        user2.setLogin("friend");
+        user2.setName("Friend User");
+        user2.setBirthday(LocalDate.of(1995, 5, 5));
+        user2 = userStorage.create(user2);
 
         userStorage.addFriend(user1.getId(), user2.getId());
 
@@ -172,23 +170,23 @@ class UserDbStorageTest {
         // Given
         User user1 = userStorage.create(testUser);
 
-        User user2 = User.builder()
-                .email("user2@example.com")
-                .login("user2")
-                .name("User Two")
-                .birthday(LocalDate.of(1992, 2, 2))
-                .build();
-        userStorage.create(user2);
+        User user2 = new User();
+        user2.setEmail("user2@example.com");
+        user2.setLogin("user2");
+        user2.setName("User Two");
+        user2.setBirthday(LocalDate.of(1992, 2, 2));
+        user2 = userStorage.create(user2);
 
-        User commonFriend = User.builder()
-                .email("common@example.com")
-                .login("common")
-                .name("Common Friend")
-                .birthday(LocalDate.of(1993, 3, 3))
-                .build();
-        userStorage.create(commonFriend);
+        User commonFriend = new User();
+        commonFriend.setEmail("common@example.com");
+        commonFriend.setLogin("common");
+        commonFriend.setName("Common Friend");
+        commonFriend.setBirthday(LocalDate.of(1993, 3, 3));
+        commonFriend = userStorage.create(commonFriend);
 
+        // user1 добавляет commonFriend в друзья
         userStorage.addFriend(user1.getId(), commonFriend.getId());
+        // user2 добавляет commonFriend в друзья
         userStorage.addFriend(user2.getId(), commonFriend.getId());
 
         // When

@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS likes (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- Исправляем: меняем 'PENDING' на 'REQUESTED' в ограничении
 CREATE TABLE IF NOT EXISTS friendships (
     user_id BIGINT,
     friend_id BIGINT,
@@ -55,5 +56,6 @@ CREATE TABLE IF NOT EXISTS friendships (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE,
     CONSTRAINT check_self_friendship CHECK (user_id != friend_id),
-    CONSTRAINT valid_status CHECK (status IN ('REQUESTED', 'CONFIRMED', 'REJECTED'))
+    CONSTRAINT valid_status CHECK (status IN ('REQUESTED', 'CONFIRMED'))
+    -- Убрали 'REJECTED' для упрощения
 );
