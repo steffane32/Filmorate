@@ -29,9 +29,11 @@ public interface UserStorage {
     boolean existsById(Long id);
 
     boolean existsByEmail(String email);
+
     Optional<User> findByEmail(String email);
 
     long count();
+
     List<User> findUsersByIds(List<Long> userIds);
 
     void confirmFriendship(Long userId, Long friendId);
