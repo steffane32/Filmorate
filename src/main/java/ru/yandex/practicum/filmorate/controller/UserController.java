@@ -14,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/users")
 public class UserController {
+
     private final UserService userService;
 
     @Autowired
@@ -23,44 +24,52 @@ public class UserController {
 
     @GetMapping
     public List<User> findAll() {
+        log.debug("Запрос всех пользователей");
         return userService.findAll();
     }
 
     @GetMapping("/{id}")
     public User findById(@PathVariable Long id) {
+        log.debug("Запрос пользователя по ID: {}", id);
         return userService.findById(id);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public User create(@Valid @RequestBody User user) {
+        log.info("Создание нового пользователя");
         return userService.create(user);
     }
 
     @PutMapping
     public User update(@Valid @RequestBody User user) {
+        log.info("Обновление пользователя с ID: {}", user.getId());
         return userService.update(user);
     }
 
     @PutMapping("/{id}/friends/{friendId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void addFriend(@PathVariable Long id, @PathVariable Long friendId) {
+        log.info("Добавление в друзья: {} -> {}", id, friendId);
         userService.addFriend(id, friendId);
     }
 
     @DeleteMapping("/{id}/friends/{friendId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeFriend(@PathVariable Long id, @PathVariable Long friendId) {
+        log.info("Удаление из друзей: {} -> {}", id, friendId);
         userService.removeFriend(id, friendId);
     }
 
     @GetMapping("/{id}/friends")
     public List<User> getFriends(@PathVariable Long id) {
+        log.debug("Получение друзей пользователя: {}", id);
         return userService.getFriends(id);
     }
 
     @GetMapping("/{id}/friends/common/{otherId}")
     public List<User> getCommonFriends(@PathVariable Long id, @PathVariable Long otherId) {
+        log.debug("Поиск общих друзей: {} и {}", id, otherId);
         return userService.getCommonFriends(id, otherId);
     }
 }
