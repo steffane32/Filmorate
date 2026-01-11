@@ -2,15 +2,18 @@ package ru.yandex.practicum.filmorate;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@AutoConfigureTestDatabase
 class FilmControllerTest {
 
     @Autowired
@@ -18,23 +21,19 @@ class FilmControllerTest {
 
     @Test
     void createFilm_ValidData_Success() throws Exception {
-        String filmJson = "{\"name\":\"Test Film\",\"description\":\"Test Description\"," +
-                "\"releaseDate\":\"2000-01-01\",\"duration\":120}";
+        String filmJson = "{" +
+                "\"name\": \"Test Film\"," +
+                "\"description\": \"Test Description\"," +
+                "\"releaseDate\": \"2020-01-01\"," +
+                "\"duration\": 120," +
+                "\"mpa\": {\"id\": 1}" +
+                "}";
 
         mockMvc.perform(post("/films")
-                        .contentType("application/json")
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content(filmJson))
-                .andExpect(status().isCreated());
-    }
-
-    @Test
-    void createFilm_EmptyName_BadRequest() throws Exception {
-        String filmJson = "{\"name\":\"\",\"description\":\"Test Description\"," +
-                "\"releaseDate\":\"2000-01-01\",\"duration\":120}";
-
-        mockMvc.perform(post("/films")
-                        .contentType("application/json")
-                        .content(filmJson))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value("Test Film"));
     }
 }

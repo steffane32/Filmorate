@@ -16,7 +16,7 @@ import java.util.Optional;
 
 @Slf4j
 @Repository
-public class MpaDbStorage implements ru.yandex.practicum.filmorate.storage.film.MpaStorage {
+public class MpaDbStorage implements MpaStorage {
 
     private final JdbcTemplate jdbcTemplate;
 

@@ -1,5 +1,6 @@
 package ru.yandex.practicum.filmorate.storage.film;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import ru.yandex.practicum.filmorate.exception.NotFoundException;
 import ru.yandex.practicum.filmorate.model.Film;
 import ru.yandex.practicum.filmorate.model.Genre;
+import ru.yandex.practicum.filmorate.model.Mpa;
 
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -20,23 +22,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Repository("filmDbStorage")
 @Primary
+@RequiredArgsConstructor
 public class FilmDbStorage implements FilmStorage {
 
     private final JdbcTemplate jdbcTemplate;
     private final MpaStorage mpaStorage;
     private final GenreStorage genreStorage;
-
-    @Autowired
-    public FilmDbStorage(JdbcTemplate jdbcTemplate, MpaStorage mpaStorage, GenreStorage genreStorage) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.mpaStorage = mpaStorage;
-        this.genreStorage = genreStorage;
-        log.info("FilmDbStorage инициализирован");
-    }
 
     private final RowMapper<Film> filmRowMapper = new RowMapper<Film>() {
         @Override
@@ -216,8 +212,13 @@ public class FilmDbStorage implements FilmStorage {
 
     public boolean existsById(Long id) {
         String sql = "SELECT COUNT(*) FROM films WHERE film_id = ?";
-        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, id);
-        return count != null && count > 0;
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, id);
+            return count != null && count > 0;
+        } catch (Exception e) {
+            log.error("Ошибка при проверке существования фильма {}: {}", id, e.getMessage());
+            return false;
+        }
     }
 
     // ============ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
@@ -278,7 +279,7 @@ public class FilmDbStorage implements FilmStorage {
     }
 
     private void updateFilmGenres(Film film) {
-        // Удаляем старые жанры
+        // Удаляем все существующие жанры
         String deleteSql = "DELETE FROM film_genres WHERE film_id = ?";
         jdbcTemplate.update(deleteSql, film.getId());
 
@@ -298,11 +299,103 @@ public class FilmDbStorage implements FilmStorage {
 
         // Проверяем существование жанров
         if (film.getGenres() != null) {
+            Set<Long> genreIds = new HashSet<>();
             for (Genre genre : film.getGenres()) {
+                if (genreIds.contains(genre.getId())) {
+                    throw new IllegalArgumentException("Дублирование жанра с id=" + genre.getId());
+                }
+                genreIds.add(genre.getId());
+
+                // Проверяем существование жанра
                 if (!genreStorage.existsById(genre.getId())) {
                     throw new NotFoundException("Жанр с id=" + genre.getId() + " не найден");
                 }
             }
         }
+    }
+
+    // Дополнительные методы для удобства
+
+    /**
+     * Получает фильмы по списку ID
+     */
+    public List<Film> findFilmsByIds(List<Long> filmIds) {
+        if (filmIds == null || filmIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        String inClause = String.join(",", Collections.nCopies(filmIds.size(), "?"));
+        String sql = String.format("SELECT * FROM films WHERE film_id IN (%s) ORDER BY film_id", inClause);
+
+        List<Film> films = jdbcTemplate.query(sql, filmRowMapper, filmIds.toArray());
+
+        for (Film film : films) {
+            loadFilmDetails(film);
+        }
+
+        return films;
+    }
+
+    /**
+     * Получает количество фильмов
+     */
+    public long count() {
+        String sql = "SELECT COUNT(*) FROM films";
+        try {
+            Long count = jdbcTemplate.queryForObject(sql, Long.class);
+            return count != null ? count : 0;
+        } catch (Exception e) {
+            log.error("Ошибка при подсчете фильмов: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Поиск фильмов по названию
+     */
+    public List<Film> searchByTitle(String title) {
+        String sql = "SELECT * FROM films WHERE LOWER(title) LIKE LOWER(?) ORDER BY film_id";
+        String searchTerm = "%" + title + "%";
+
+        List<Film> films = jdbcTemplate.query(sql, filmRowMapper, searchTerm);
+
+        for (Film film : films) {
+            loadFilmDetails(film);
+        }
+
+        return films;
+    }
+
+    /**
+     * Получает фильмы определенного жанра
+     */
+    public List<Film> getFilmsByGenre(Long genreId) {
+        String sql = "SELECT f.* FROM films f " +
+                "JOIN film_genres fg ON f.film_id = fg.film_id " +
+                "WHERE fg.genre_id = ? " +
+                "ORDER BY f.film_id";
+
+        List<Film> films = jdbcTemplate.query(sql, filmRowMapper, genreId);
+
+        for (Film film : films) {
+            loadFilmDetails(film);
+        }
+
+        return films;
+    }
+
+    /**
+     * Получает фильмы определенного MPA рейтинга
+     */
+    public List<Film> getFilmsByMpa(Long mpaId) {
+        String sql = "SELECT * FROM films WHERE mpa_id = ? ORDER BY film_id";
+
+        List<Film> films = jdbcTemplate.query(sql, filmRowMapper, mpaId);
+
+        for (Film film : films) {
+            loadFilmDetails(film);
+        }
+
+        return films;
     }
 }
