@@ -51,8 +51,6 @@ public class UserDbStorage implements UserStorage {
             Long userId = user.getId();
             user.getFriends().addAll(getUserFriends(userId));
 
-            log.debug("Сопоставлен пользователь из БД: ID={}, email={}",
-                    user.getId(), user.getEmail());
             return user;
         }
     };
@@ -94,28 +92,13 @@ public class UserDbStorage implements UserStorage {
             Number key = keyHolder.getKey();
             if (key != null) {
                 user.setId(key.longValue());
-                log.info("Пользователь сохранён в БД с ID: {}, email={}",
-                        user.getId(), user.getEmail());
+                log.info("Пользователь сохранён в БД с ID: {}, email={}", user.getId(), user.getEmail());
             } else {
                 log.error("Не удалось получить сгенерированный ID для пользователя");
-                // Альтернативный способ получить ID
-                String getIdSql = "SELECT user_id FROM users WHERE email = ?";
-                try {
-                    Long id = jdbcTemplate.queryForObject(getIdSql, Long.class, user.getEmail());
-                    user.setId(id);
-                    log.info("Получен ID из отдельного запроса: {}", id);
-                } catch (Exception e) {
-                    log.error("Не удалось получить ID пользователя: {}", e.getMessage(), e);
-                    throw new RuntimeException("Не удалось получить ID пользователя", e);
-                }
+                throw new RuntimeException("Не удалось получить ID пользователя");
             }
 
         } catch (DataAccessException e) {
-            if (e.getMessage().contains("Unique index or primary key violation") ||
-                    e.getMessage().contains("constraint") && e.getMessage().contains("email")) {
-                log.error("Пользователь с email {} уже существует", user.getEmail());
-                throw new IllegalArgumentException("Пользователь с email " + user.getEmail() + " уже существует");
-            }
             log.error("Ошибка при сохранении пользователя в БД: {}", e.getMessage(), e);
             throw new RuntimeException("Ошибка при сохранении пользователя", e);
         }
@@ -131,11 +114,6 @@ public class UserDbStorage implements UserStorage {
             throw new IllegalArgumentException("ID пользователя должен быть указан");
         }
 
-        // Проверяем существование пользователя
-        if (!existsById(user.getId())) {
-            throw new NotFoundException("Пользователь с id=" + user.getId() + " не найден");
-        }
-
         String sql = "UPDATE users SET email = ?, login = ?, user_name = ?, birthday = ? WHERE user_id = ?";
 
         try {
@@ -147,15 +125,14 @@ public class UserDbStorage implements UserStorage {
                     user.getId()
             );
 
-            log.info("Пользователь обновлён в БД: ID={}, строк обновлено: {}", user.getId(), rowsUpdated);
+            if (rowsUpdated == 0) {
+                throw new NotFoundException("Пользователь с id=" + user.getId() + " не найден");
+            }
+
+            log.info("Пользователь обновлён в БД: ID={}", user.getId());
             return findById(user.getId());
 
         } catch (DataAccessException e) {
-            if (e.getMessage().contains("Unique index or primary key violation") ||
-                    e.getMessage().contains("constraint") && e.getMessage().contains("email")) {
-                log.error("Пользователь с email {} уже существует", user.getEmail());
-                throw new IllegalArgumentException("Пользователь с email " + user.getEmail() + " уже существует");
-            }
             log.error("Ошибка при обновлении пользователя в БД: {}", e.getMessage(), e);
             throw new RuntimeException("Ошибка при обновлении пользователя", e);
         }
@@ -184,47 +161,39 @@ public class UserDbStorage implements UserStorage {
     public void delete(Long id) {
         log.info("Удаление пользователя из БД: ID={}", id);
 
-        // Проверяем существование пользователя
-        if (!existsById(id)) {
-            throw new NotFoundException("Пользователь с id=" + id + " не найден");
-        }
-
         String sql = "DELETE FROM users WHERE user_id = ?";
         int rowsDeleted = jdbcTemplate.update(sql, id);
 
-        log.info("Пользователь удалён из БД: ID={}, строк удалено: {}", id, rowsDeleted);
+        if (rowsDeleted == 0) {
+            throw new NotFoundException("Пользователь с id=" + id + " не найден");
+        }
+
+        log.info("Пользователь удалён из БД: ID={}", id);
     }
 
     @Override
     public void addFriend(Long userId, Long friendId) {
         log.info("Добавление друга (одностороннее): {} -> {}", userId, friendId);
 
-        // Проверяем, что пользователи существуют
-        if (!existsById(userId)) {
-            throw new NotFoundException("Пользователь с id=" + userId + " не найден");
-        }
-        if (!existsById(friendId)) {
-            throw new NotFoundException("Пользователь с id=" + friendId + " не найден");
-        }
+        // Проверяем существование пользователей
+        findById(userId);
+        findById(friendId);
 
         // Проверяем, что не добавляют самого себя
         if (userId.equals(friendId)) {
             throw new IllegalArgumentException("Пользователь не может добавить самого себя в друзья");
         }
 
-        // Проверяем, не являются ли уже друзьями
-        if (isFriends(userId, friendId)) {
-            throw new IllegalArgumentException("Пользователь уже в друзьях");
-        }
-
         try {
-            // Добавляем одностороннюю дружбу (без статуса)
+            // Добавляем одностороннюю дружбу
             String sql = "INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)";
             jdbcTemplate.update(sql, userId, friendId);
             log.info("Друг добавлен (односторонне): {} -> {}", userId, friendId);
         } catch (DataAccessException e) {
             if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("unique constraint")) {
-                throw new IllegalArgumentException("Пользователь уже в друзьях");
+                log.info("Пользователь уже в друзьях: {} -> {}", userId, friendId);
+                // Если уже друзья, не выбрасываем исключение - просто игнорируем
+                return;
             }
             log.error("Ошибка при добавлении друга в БД: {}", e.getMessage(), e);
             throw new RuntimeException("Не удалось добавить друга", e);
@@ -236,19 +205,17 @@ public class UserDbStorage implements UserStorage {
         log.info("Удаление друга (одностороннее): {} -> {}", userId, friendId);
 
         // Проверяем существование пользователей
-        if (!existsById(userId)) {
-            throw new NotFoundException("Пользователь с id=" + userId + " не найден");
-        }
-        if (!existsById(friendId)) {
-            throw new NotFoundException("Пользователь с id=" + friendId + " не найден");
-        }
+        findById(userId);
+        findById(friendId);
 
         String sql = "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?";
         int rowsDeleted = jdbcTemplate.update(sql, userId, friendId);
 
         if (rowsDeleted == 0) {
-            log.error("Дружба не найдена в БД: {} -> {}", userId, friendId);
-            throw new IllegalArgumentException("Дружба не найдена");
+            log.info("Дружба не найдена: {} -> {}", userId, friendId);
+            // В односторонней дружбе не нужно выбрасывать исключение, если дружбы нет
+            // Просто ничего не делаем
+            return;
         }
 
         log.info("Друг удалён (односторонне): {} -> {}", userId, friendId);
@@ -259,9 +226,7 @@ public class UserDbStorage implements UserStorage {
         log.info("Получение друзей пользователя (одностороннее): ID={}", userId);
 
         // Проверяем существование пользователя
-        if (!existsById(userId)) {
-            throw new NotFoundException("Пользователь с id=" + userId + " не найден");
-        }
+        findById(userId);
 
         String sql = "SELECT u.* FROM users u " +
                 "JOIN friendships f ON u.user_id = f.friend_id " +
@@ -283,12 +248,8 @@ public class UserDbStorage implements UserStorage {
         log.info("Поиск общих друзей: {} и {}", userId1, userId2);
 
         // Проверяем существование пользователей
-        if (!existsById(userId1)) {
-            throw new NotFoundException("Пользователь с id=" + userId1 + " не найден");
-        }
-        if (!existsById(userId2)) {
-            throw new NotFoundException("Пользователь с id=" + userId2 + " не найден");
-        }
+        findById(userId1);
+        findById(userId2);
 
         String sql = "SELECT u.* FROM users u " +
                 "WHERE u.user_id IN (" +
@@ -383,22 +344,8 @@ public class UserDbStorage implements UserStorage {
     @Override
     public void confirmFriendship(Long userId, Long friendId) {
         log.info("Подтверждение дружбы между {} и {}", userId, friendId);
-        // В новой схеме дружба односторонняя без подтверждения, поэтому просто добавляем друга
+        // В односторонней дружбе подтверждение не требуется
         addFriend(userId, friendId);
-    }
-
-    /**
-     * Проверяет, являются ли пользователи друзьями
-     */
-    private boolean isFriends(Long userId1, Long userId2) {
-        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ? AND friend_id = ?";
-        try {
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId1, userId2);
-            return count != null && count > 0;
-        } catch (Exception e) {
-            log.error("Ошибка при проверке дружбы между {} и {}: {}", userId1, userId2, e.getMessage(), e);
-            throw new RuntimeException("Ошибка при проверке дружбы", e);
-        }
     }
 
     /**
@@ -413,6 +360,20 @@ public class UserDbStorage implements UserStorage {
         } catch (Exception e) {
             log.error("Ошибка при получении друзей пользователя {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("Ошибка при получении друзей пользователя", e);
+        }
+    }
+
+    /**
+     * Проверяет, являются ли пользователи друзьями (односторонне)
+     */
+    private boolean isFriends(Long userId1, Long userId2) {
+        String sql = "SELECT COUNT(*) FROM friendships WHERE user_id = ? AND friend_id = ?";
+        try {
+            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId1, userId2);
+            return count != null && count > 0;
+        } catch (Exception e) {
+            log.error("Ошибка при проверке дружбы между {} и {}: {}", userId1, userId2, e.getMessage(), e);
+            throw new RuntimeException("Ошибка при проверке дружбы", e);
         }
     }
 }
