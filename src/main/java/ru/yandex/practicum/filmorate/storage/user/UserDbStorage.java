@@ -246,9 +246,12 @@ public class UserDbStorage implements UserStorage {
         String sql = "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?";
         int rowsDeleted = jdbcTemplate.update(sql, userId, friendId);
 
+        // ИЗМЕНЕНИЕ: Не бросаем исключение, если дружбы не существует
+        // Просто логируем и завершаем операцию
         if (rowsDeleted == 0) {
-            log.warn("Дружба не найдена в БД: {} -> {}", userId, friendId);
-            throw new IllegalArgumentException("Дружба не найдена");
+            log.info("⚠️ Дружба не найдена (или уже удалена): {} -> {}", userId, friendId);
+            // Не бросаем исключение - удаление несуществующей дружбы считается успешным
+            return;
         }
 
         log.info("✅ Друг удалён (односторонне): {} -> {}", userId, friendId);

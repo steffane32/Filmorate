@@ -129,8 +129,14 @@ public class UserService {
         log.info("Удаление из друзей: пользователь {} удаляет {}", userId, friendId);
 
         try {
+            // Проверяем существование пользователей
+            userStorage.findById(userId);
+            userStorage.findById(friendId);
+
             // Удаляем друга через хранилище
+            // Метод не бросает исключение, если дружбы не существует
             userStorage.removeFriend(userId, friendId);
+
             log.info("✅ Пользователь {} удалил из друзей пользователя {}", userId, friendId);
 
         } catch (Exception e) {
