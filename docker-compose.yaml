@@ -1,0 +1,32 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  filmorate:
+    build: .
+    container_name: filmorate-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./db:/app/db  # Сохраняем данные H2 на хосте
+      - ./logs:/app/logs  # Логи приложения
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  h2-console:
+    image: oscarfonts/h2
+    container_name: h2-console
+    ports:
+      - "8082:8082"
+    environment:
+      - H2_OPTIONS=-ifNotExists
+    volumes:
+      - ./db:/opt/h2-data  # Общая папка с данными
+    restart: unless-stopped
